@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
+import li.songe.gkd.MainActivity
 import li.songe.gkd.store.storeFlow
 import li.songe.gkd.ui.component.AppPageScaffold
 import li.songe.gkd.ui.component.PerfIcon
@@ -36,7 +37,7 @@ data object DesignRoute : NavKey
 @Composable
 fun DesignPage() {
     val mainVm = LocalMainViewModel.current
-    val activity = LocalActivity.current
+    val context = LocalActivity.current as MainActivity
     val store by storeFlow.collectAsState()
     val scrollState = rememberScrollState()
     val shaderOk = isRuntimeShaderSupported()
@@ -101,8 +102,8 @@ fun DesignPage() {
                         checked = store.enablePredictiveBack,
                         onCheckedChange = { enabled ->
                             storeFlow.update { s -> s.copy(enablePredictiveBack = enabled) }
-                            activity?.applyPredictiveBackEnabled(enabled)
-                            activity?.recreate()
+                            context.applyPredictiveBackEnabled(enabled)
+                            context.recreate()
                         },
                     )
                 }

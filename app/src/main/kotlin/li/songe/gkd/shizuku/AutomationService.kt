@@ -92,8 +92,8 @@ class AutomationService private constructor() : A11yCommonImpl {
         if (tempShutdownFlag) {
             toast("自动化局部关闭")
         } else {
+            // 与无障碍一致：系统断开勿清 enableAutomator，仅用户主动关时在 switch 里清除
             toast("自动化已关闭")
-            updateEnableAutomator(false)
         }
     }
 

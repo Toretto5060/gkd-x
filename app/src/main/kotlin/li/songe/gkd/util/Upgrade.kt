@@ -1,6 +1,7 @@
 package li.songe.gkd.util
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +13,7 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -137,11 +139,16 @@ class UpdateStatus(val scope: CoroutineScope) {
             try {
                 val channel =
                     client.get(URI(UPDATE_URL).resolve(newVersion.downloadUrl).toString()) {
-                        onDownload { bytesSentTotal, _ ->
+                        onDownload { bytesSentTotal, contentLength ->
                             val downloadStatus = downloadStatusFlow.value
                             if (downloadStatus is LoadStatus.Loading) {
+                                val total = when {
+                                    contentLength != null && contentLength > 0L -> contentLength
+                                    newVersion.fileSize > 0L -> newVersion.fileSize
+                                    else -> return@onDownload
+                                }
                                 downloadStatusFlow.value = LoadStatus.Loading(
-                                    bytesSentTotal.toFloat() / (newVersion.fileSize)
+                                    (bytesSentTotal.toFloat() / total).coerceIn(0f, 1f)
                                 )
                             } else if (downloadStatus is LoadStatus.Failure) {
                                 // 提前终止下载
@@ -225,80 +232,96 @@ class UpdateStatus(val scope: CoroutineScope) {
             )
         }
 
-        downloadStatusFlow.collectAsState().value?.let { downloadStatusVal ->
-            when (downloadStatusVal) {
-                is LoadStatus.Loading -> {
-                    PerfAlertDialog(
-                        title = { Text(text = "下载中") },
-                        text = {
-                            AppLinearProgressIndicator(
-                                progress = { downloadStatusVal.progress },
-                            )
-                        },
-                        onDismissRequest = {},
-                        confirmButton = {
-                            TextButton(
-                                text = "终止下载",
-                                onClick = {
-                                    downloadStatusFlow.value = LoadStatus.Failure(
-                                        Exception("终止下载")
-                                    )
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                        },
-                    )
-                }
-
-                is LoadStatus.Failure -> {
-                    PerfAlertDialog(
-                        title = { Text(text = "下载失败") },
-                        text = {
-                            Text(text = downloadStatusVal.exception.let {
-                                it.message ?: it.toString()
-                            })
-                        },
-                        onDismissRequest = { downloadStatusFlow.value = null },
-                        confirmButton = {
-                            TextButton(
-                                text = "关闭",
-                                onClick = {
-                                    downloadStatusFlow.value = null
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                        },
-                    )
-                }
-
-                is LoadStatus.Success -> {
-                    PerfAlertDialog(
-                        title = { Text(text = "下载完毕") },
-                        text = {
-                            Text(text = "可继续选择安装新版本")
-                        },
-                        onDismissRequest = {},
-                        dismissButton = {
-                            TextButton(
-                                text = "关闭",
-                                onClick = {
-                                    downloadStatusFlow.value = null
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                        },
-                        confirmButton = {
-                            TextButton(
-                                text = "安装",
-                                onClick = throttle {
-                                    installApk(downloadStatusVal.result)
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.textButtonColorsPrimary(),
-                            )
-                        })
-                }
+        val downloadStatus by downloadStatusFlow.collectAsState()
+        when (val downloadStatusVal = downloadStatus) {
+            is LoadStatus.Loading -> {
+                PerfAlertDialog(
+                    title = { Text(text = "下载中") },
+                    text = {
+                        // 在对话框内容里订阅 Flow，避免 WindowDialog 子组合拿不到进度更新
+                        val loadingState = downloadStatusFlow.collectAsState()
+                        val progress = (loadingState.value as? LoadStatus.Loading)?.progress ?: 0f
+                        val showExactProgress = 0f < progress && progress < 1f
+                        AnimatedContent(showExactProgress) { showExact ->
+                            if (showExact) {
+                                AppLinearProgressIndicator(
+                                    progress = {
+                                        (loadingState.value as? LoadStatus.Loading)?.progress ?: 0f
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                AppLinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    },
+                    onDismissRequest = {},
+                    confirmButton = {
+                        TextButton(
+                            text = "终止下载",
+                            onClick = {
+                                downloadStatusFlow.value = LoadStatus.Failure(
+                                    Exception("终止下载")
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    },
+                )
             }
+
+            is LoadStatus.Failure -> {
+                PerfAlertDialog(
+                    title = { Text(text = "下载失败") },
+                    text = {
+                        Text(text = downloadStatusVal.exception.let {
+                            it.message ?: it.toString()
+                        })
+                    },
+                    onDismissRequest = { downloadStatusFlow.value = null },
+                    confirmButton = {
+                        TextButton(
+                            text = "关闭",
+                            onClick = {
+                                downloadStatusFlow.value = null
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    },
+                )
+            }
+
+            is LoadStatus.Success -> {
+                PerfAlertDialog(
+                    title = { Text(text = "下载完毕") },
+                    text = {
+                        Text(text = "可继续选择安装新版本")
+                    },
+                    onDismissRequest = {},
+                    dismissButton = {
+                        TextButton(
+                            text = "关闭",
+                            onClick = {
+                                downloadStatusFlow.value = null
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            text = "安装",
+                            onClick = throttle {
+                                installApk(downloadStatusVal.result)
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.textButtonColorsPrimary(),
+                        )
+                    })
+            }
+
+            null -> Unit
         }
     }
 }

@@ -1,10 +1,15 @@
 {
-  "versionCode": 98,
-  "versionName": "1.2.4",
-  "changelog": "v1.2.4\n\n- 修复悬浮底栏液态玻璃边缘折射/反射错位（padding 须在 blur 之前）\n- 更新检测优先 GitHub raw，多源比对最高 versionCode，避免 CDN 脏缓存挡住更新",
-  "downloadUrl": "https://github.com/hanchuan8/gkd-miuix/releases/download/v1.2.4/gkd-x-v1.2.4.apk",
-  "fileSize": 3473851,
+  "versionCode": 99,
+  "versionName": "1.2.5",
+  "changelog": "v1.2.5\n\n- 修复开机后需手动打开「服务状态」：系统杀掉无障碍时不再误清开启意图，自动修复会补写无障碍总开关\n- 修复无障碍进入 Crashed 后开关显示开启但跳广告失效、且关不掉：关闭时从安全设置移除，开启/修复时先摘再挂",
+  "downloadUrl": "https://github.com/hanchuan8/gkd-miuix/releases/download/v1.2.5/gkd-x-v1.2.5.apk",
+  "fileSize": 0,
   "versionLogs": [
+    {
+      "name": "1.2.5",
+      "code": 99,
+      "desc": "- 修复开机后需手动打开「服务状态」：系统杀掉无障碍时不再误清开启意图，自动修复会补写无障碍总开关\n- 修复无障碍进入 Crashed 后开关显示开启但跳广告失效、且关不掉：关闭时从安全设置移除，开启/修复时先摘再挂"
+    },
     {
       "name": "1.2.4",
       "code": 98,
@@ -40,6 +45,5 @@
       "code": 92,
       "desc": "- 全量 MIUIX 界面（顶栏模糊、悬浮底栏、液态玻璃 FAB）\n- 预测式返回开关；动态取色默认关闭\n- 订阅添加/修改/刷新时显示加载进度\n- 触发提示支持流体云 / 灵动岛实时通知，并可自定义存在时间"
     }
-  ],
-  "cdnBust": "2026-07-23T15:20"
+  ]
 }

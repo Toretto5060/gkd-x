@@ -26,6 +26,7 @@ import li.songe.gkd.shizuku.uiAutomationFlow
 import li.songe.gkd.store.actualA11yScopeAppList
 import li.songe.gkd.store.actualBlockA11yAppList
 import li.songe.gkd.store.storeFlow
+import li.songe.gkd.store.updateEnableAutomator
 import li.songe.gkd.util.launchTry
 import li.songe.gkd.util.mapState
 import li.songe.gkd.util.runMainPost
@@ -46,44 +47,66 @@ private const val A11Y_AWAIT_START_TIME = 2000L
 private const val A11Y_AWAIT_FIX_TIME = 1000L
 
 private fun modifyA11yRun(block: suspend () -> Unit) {
-    if (modifyA11yMutex.isLocked) return
+    // 不可在 locked 时直接丢弃，否则关服务/开服务会「点了没反应」
     appScope.launchTry(Dispatchers.IO) {
-        if (modifyA11yMutex.isLocked) return@launchTry
         modifyA11yMutex.withLock { block() }
     }
 }
 
-private suspend fun switchA11yService() {
-    if (A11yService.isRunning.value) {
-        A11yService.instance?.disableSelf()
-    } else {
-        if (!writeSecureSettingsState.updateAndGet()) {
-            if (!writeSecureSettingsState.value) {
-                toast("请先授予「写入安全设置权限」")
-                return
-            }
-        }
+/** 从安全设置移除并 disable，清掉 Enabled/Crashed 残留 */
+private suspend fun stopA11yServiceFully() {
+    updateEnableAutomator(false)
+    if (writeSecureSettingsState.updateAndGet()) {
         val names = app.getSecureA11yServices()
-        app.putSecureInt(Settings.Secure.ACCESSIBILITY_ENABLED, 1)
-        if (names.contains(A11yService.a11yCn)) { // 当前无障碍异常, 重启服务
-            names.remove(A11yService.a11yCn)
+        if (names.remove(A11yService.a11yCn)) {
             app.putSecureA11yServices(names)
-            delay(A11Y_AWAIT_FIX_TIME)
         }
-        names.add(A11yService.a11yCn)
-        app.putSecureA11yServices(names)
-        delay(A11Y_AWAIT_START_TIME)
-        // https://github.com/orgs/gkd-kit/discussions/799
-        if (!A11yService.isRunning.value) {
-            toast("开启无障碍失败")
-            accessRestrictedSettingsShowFlow.value = true
+    }
+    A11yService.instance?.disableSelf()
+    delay(A11Y_AWAIT_FIX_TIME)
+}
+
+private suspend fun startA11yServiceFully() {
+    if (!writeSecureSettingsState.updateAndGet()) {
+        if (!writeSecureSettingsState.value) {
+            toast("请先授予「写入安全设置权限」")
             return
         }
+    }
+    val names = app.getSecureA11yServices()
+    app.putSecureInt(Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+    // 先移除再添加：清 Crashed / 半死不活绑定
+    if (names.remove(A11yService.a11yCn)) {
+        app.putSecureA11yServices(names)
+        delay(A11Y_AWAIT_FIX_TIME)
+    }
+    names.add(A11yService.a11yCn)
+    app.putSecureA11yServices(names)
+    delay(A11Y_AWAIT_START_TIME)
+    // https://github.com/orgs/gkd-kit/discussions/799
+    if (!A11yService.isRunning.value) {
+        toast("开启无障碍失败")
+        accessRestrictedSettingsShowFlow.value = true
+        return
+    }
+    updateEnableAutomator(true)
+}
+
+private suspend fun switchA11yService() {
+    val names = app.getSecureA11yServices()
+    val listed = names.contains(A11yService.a11yCn)
+    if (A11yService.isRunning.value || listed) {
+        stopA11yServiceFully()
+    } else {
+        startA11yServiceFully()
     }
 }
 
 private fun switchAutomationService() {
     val newEnabled = uiAutomationFlow.value == null
+    if (!newEnabled) {
+        updateEnableAutomator(false)
+    }
     uiAutomationFlow.value?.shutdown()
     if (newEnabled && shizukuContextFlow.value.ok) {
         AutomationService.tryConnect()
@@ -113,25 +136,24 @@ private fun skipBlockApp(): Boolean {
 }
 
 private suspend fun fixA11yService() {
-    if (!A11yService.isRunning.value && writeSecureSettingsState.updateAndGet()) {
-        if (skipBlockApp()) return
-        val names = app.getSecureA11yServices()
-        val a11yBroken = names.contains(A11yService.a11yCn)
-        if (a11yBroken) {
-            // 无障碍出现故障, 重启服务
-            names.remove(A11yService.a11yCn)
-            app.putSecureA11yServices(names)
-            // 必须等待一段时间, 否则概率不会触发系统重启无障碍
-            delay(A11Y_AWAIT_FIX_TIME)
-            if (!currentAppUseA11y) return
-        }
-        names.add(A11yService.a11yCn)
+    if (!writeSecureSettingsState.updateAndGet()) return
+    if (skipBlockApp()) return
+    if (A11yService.isRunning.value) return
+    if (!currentAppUseA11y) return
+    val names = app.getSecureA11yServices()
+    // 开机后 ColorOS 等可能把总开关清 0；列表里残留时先摘掉再挂上以清 Crashed
+    app.putSecureInt(Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+    if (names.remove(A11yService.a11yCn)) {
         app.putSecureA11yServices(names)
-        delay(A11Y_AWAIT_START_TIME)
-        if (currentAppUseA11y && !A11yService.isRunning.value) {
-            toast("重启无障碍失败")
-            accessRestrictedSettingsShowFlow.value = true
-        }
+        delay(A11Y_AWAIT_FIX_TIME)
+        if (!currentAppUseA11y) return
+    }
+    names.add(A11yService.a11yCn)
+    app.putSecureA11yServices(names)
+    delay(A11Y_AWAIT_START_TIME)
+    if (!A11yService.isRunning.value) {
+        toast("重启无障碍失败")
+        accessRestrictedSettingsShowFlow.value = true
     }
 }
 
@@ -149,6 +171,12 @@ fun fixRestartAutomatorService() = modifyA11yRun {
             fixA11yService()
         } else {
             fixAutomationService()
+        }
+    } else if (currentAppUseA11y) {
+        // 意图已关但仍 Enabled/Crashed 时，进 App 自动清掉，避免「关不掉 / 开着却不点广告」
+        val listed = app.getSecureA11yServices().contains(A11yService.a11yCn)
+        if (listed || A11yService.isRunning.value) {
+            stopA11yServiceFully()
         }
     }
 }
@@ -175,6 +203,7 @@ private fun innerForcedUpdateA11yService(disabled: Boolean) {
         if (!writeSecureSettingsState.stateFlow.value) {
             return
         }
+        app.putSecureInt(Settings.Secure.ACCESSIBILITY_ENABLED, 1)
         val names = app.getSecureA11yServices()
         names.add(A11yService.a11yCn)
         app.putSecureA11yServices(names)

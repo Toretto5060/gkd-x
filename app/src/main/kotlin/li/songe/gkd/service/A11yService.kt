@@ -20,7 +20,6 @@ import li.songe.gkd.a11y.A11yRuleEngine
 import li.songe.gkd.a11y.topActivityFlow
 import li.songe.gkd.a11y.updateTopActivity
 import li.songe.gkd.shizuku.shizukuContextFlow
-import li.songe.gkd.store.updateEnableAutomator
 import li.songe.gkd.util.AndroidTarget
 import li.songe.gkd.util.AutomatorModeOption
 import li.songe.gkd.util.DefaultA11yLifeImpl
@@ -106,19 +105,18 @@ abstract class A11yService : AccessibilityService(), OnA11yLife by DefaultA11yLi
         onA11yConnected { instance = this }
         onDestroyed { instance = null }
         onCreated {
-            if (currentAppUseA11y) {
-                updateEnableAutomator(true)
-            } else {
+            if (!currentAppUseA11y) {
                 toast("当前为自动化模式，无障碍将自动关闭", forced = true)
                 runMainPost(1) { shutdown(true) }
             }
+            // 勿在此处 updateEnableAutomator(true)：系统残留/Crashed 重绑会把用户「关闭」意图冲掉
         }
         onDestroyed {
             if (tempShutdownFlag) {
                 toast("无障碍局部关闭")
             } else {
+                // 系统杀进程/重启也会走到这里；勿清 enableAutomator，否则开机后进 App 不会自动重开
                 toast("无障碍已关闭")
-                updateEnableAutomator(false)
             }
         }
         useAliveOverlayView()
