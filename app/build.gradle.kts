@@ -63,8 +63,8 @@ android {
     namespace = "li.songe.gkd"
     defaultConfig {
         applicationId = "li.songe.gkdx"
-        versionCode = 99
-        versionName = "1.2.5"
+        versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.orElse(1).get()
+        versionName = providers.gradleProperty("versionName").orElse("0.0.1").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -159,12 +159,11 @@ android {
     )
 }
 
-if (project.hasProperty("GKD_RENAME_APK_FLAG")) {
-    androidComponents.onVariants { variant ->
-        variant.outputs.onEach { output ->
-            output as VariantOutputImpl
-            output.outputFileName = "gkd-x-v${output.versionName.get()}.apk"
-        }
+androidComponents.onVariants { variant ->
+    variant.outputs.onEach { output ->
+        output as VariantOutputImpl
+        val versionName = providers.gradleProperty("versionName").orElse("0.0.1").get()
+        output.outputFileName = "GKD-X-v$versionName.apk"
     }
 }
 

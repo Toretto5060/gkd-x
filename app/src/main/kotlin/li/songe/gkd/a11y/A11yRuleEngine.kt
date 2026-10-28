@@ -173,7 +173,7 @@ class A11yRuleEngine(val service: A11yCommonImpl) {
         val rightAppId = if (oldAppId == evAppId) {
             evAppId
         } else {
-            getTimeoutAppId() ?: return
+            getTimeoutAppId(evAppId) ?: return
         }
         if (rightAppId == evAppId) {
             if (latestEvent.type == STATE_CHANGED) {
@@ -207,8 +207,15 @@ class A11yRuleEngine(val service: A11yCommonImpl) {
 
     private var lastGetAppIdTime = 0L
     private var lastAppId: String? = null
-    private suspend fun getTimeoutAppId(): String? {
-        if (lastAppId != null && System.currentTimeMillis() - lastGetAppIdTime <= 100) return lastAppId
+    private suspend fun getTimeoutAppId(eventAppId: String): String? {
+        if (canUseCachedAppId(
+                cachedAppId = lastAppId,
+                eventAppId = eventAppId,
+                cacheAge = System.currentTimeMillis() - lastGetAppIdTime,
+            )
+        ) {
+            return lastAppId
+        }
         // 某些应用通过无障碍获取 safeActiveWindow 耗时长，导致多个事件连续堆积堵塞，无法检测到 appId 切换导致状态异常
         // https://github.com/gkd-kit/gkd/issues/622
         lastAppId = withTimeoutOrNull(100) {

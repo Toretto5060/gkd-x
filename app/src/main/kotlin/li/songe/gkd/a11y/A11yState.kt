@@ -158,10 +158,16 @@ fun updateTopActivity(
     if (scene == ActivityScene.TaskStack) {
         lastActivityForceUpdateTime = t
     } else if (scene == ActivityScene.A11y) {
-        if (idChanged && lastActivityForceUpdateTime > 0) {
+        if (idChanged && lastActivityForceUpdateTime > 0 && shouldDeferA11yActivityUpdate(
+                currentAppId = oldActivity.appId,
+                newAppId = appId,
+                newActivityId = activityId,
+                launcherAppId = launcherAppId,
+                elapsedSinceTaskStackUpdate = t - lastActivityForceUpdateTime,
+            )
+        ) {
             // ITaskStackListener 大部分场景快于无障碍
-            if (t - lastActivityForceUpdateTime < 1000) return
-            if (activityId != null && t - lastActivityForceUpdateTime < 3000) return
+            return
         }
         if (isSame && t - lastActivityUpdateTime < 1000) return
     }

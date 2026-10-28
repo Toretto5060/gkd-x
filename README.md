@@ -8,6 +8,16 @@
 - **界面**：MIUIX（顶栏 / 底栏 / 设置分组 / 对话框 / 图标等）
 - **能力**：与上游 GKD 相同的选择器、订阅规则、快照与自动化能力
 
+
+# 编译命令
+```sh
+
+  ./gradlew :app:assembleRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease -PversionName=0.0.1 -PversionCode=1000
+  
+```
+产物在 `app/build/outputs/apk/release/app-release.apk`。
+
+
 ## 界面预览（MIUIX）
 
 | 首页 | 订阅 | 应用 | 设置 |
